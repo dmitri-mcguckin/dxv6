@@ -121,6 +121,7 @@ allocproc(void)
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  p->start_ticks = ticks;
   return p;
 }
 
@@ -525,6 +526,24 @@ kill(int pid)
 // No lock to avoid wedging a stuck machine further.
 
 void
+procdumpP1(struct proc* p, char* state)
+{
+  uint et = ticks - p->start_ticks; // Elapsed time
+  uint second = et / 1000;
+  uint decimal = et - (second * 1000);
+  char* padding;
+
+  if(decimal < 10)
+    padding = "00";
+  else if(decimal < 100)
+    padding = "0";
+  else
+    padding = "";
+
+  cprintf("%d\t%s\t\t%d.%s%d\t\t%s\t%d", p->pid, p->name, second, padding, decimal, state, p->sz);
+}
+
+void
 procdump(void)
 {
   int i;
@@ -539,7 +558,7 @@ procdump(void)
 #elif defined(CS333_P2)
 #define HEADER "\nPID\tName         UID\tGID\tPPID\tElapsed\tCPU\tState\tSize\t PCs\n"
 #elif defined(CS333_P1)
-#define HEADER "\nPID\tName         Elapsed\tState\tSize\t PCs\n"
+#define HEADER "\nPID\tName            Elapsed\t\tState\tSize\t PCs\n"
 #else
 #define HEADER "\n"
 #endif
