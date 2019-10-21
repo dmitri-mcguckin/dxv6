@@ -1,27 +1,39 @@
 #ifdef CS333_P2
 #include "types.h"
 #include "user.h"
-#include "uproc.h"
 
 int
 main(int argc, char* argv[])
 {
-	char* sub_command;
-	char** sub_args = (char**) malloc((argc - 1) * sizeof(char*));
-	sub_command = argv[1];
-	printf(1, "Executing: %s [ ", sub_command);
-	for(int i = 1; i < argc - 1; ++i){
-		sub_args[i] = malloc(sizeof(char[strlen(argv[i])]));
-		sub_args[i] = argv[i + 1];
-		printf(1, "%s ", sub_args[i]);
-	}
-	printf(1, "]\n");
-	
-	uint start = 420;
-	exec(sub_command, sub_args);
-	uint elapsed = 860 - start;
+	uint subc = argc - 2;
+	char* sub_command = (char*) malloc(strlen(argv[1]));
+	char** sub_args;
 
-	printf(1, "Program ran %d ticks!\n", elapsed);
+	strcpy(sub_command, argv[1]);
+
+	if(subc > 0){
+		sub_args = (char**) malloc(subc * sizeof(char*));
+		for(int i = 2; i < argc; ++i){
+			sub_args[i - 2] = (char*) malloc(strlen(argv[i]));
+			strcpy(sub_args[i - 2], argv[i]);
+		}
+	}
+	else sub_args = NULL;
+
+	uint start = uptime();
+	exec(sub_command, sub_args);
+	while(wait() > 0){}
+	uint elapsed = uptime() - start;
+
+	char* padding;
+	uint seconds = elapsed / 1000;
+	uint decimal = elapsed - (seconds * 1000);
+
+	if(decimal < 10) padding = "00";
+	else if(decimal < 100) padding = "0";
+	else padding = "";
+
+	printf(1, "%s ran in %d.%s%d seconds.\n", sub_command, seconds, padding, decimal);
 
 	exit();
 }
