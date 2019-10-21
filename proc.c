@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#include "uproc.h"
+
 static char *states[] = {
 [UNUSED]    "unused",
 [EMBRYO]    "embryo",
@@ -122,6 +124,8 @@ allocproc(void)
   p->context->eip = (uint)forkret;
 
   p->start_ticks = ticks;
+  p->cpu_ticks_total = 0;
+  p->cpu_ticks_in = 0;
   return p;
 }
 
@@ -158,6 +162,8 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
   p->state = RUNNABLE;
+  p->uid = DEF_UID;
+  p->gid = DEF_GID;
   release(&ptable.lock);
 }
 
@@ -207,6 +213,8 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->uid = curproc->uid;
+  np->gid = curproc->gid;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -362,6 +370,7 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      p->cpu_ticks_in = ticks;
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -402,6 +411,7 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
+  p->cpu_ticks_total += (ticks - p->cpu_ticks_in);
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
@@ -532,15 +542,49 @@ procdumpP1(struct proc* p, char* state)
   uint second = et / 1000;
   uint decimal = et - (second * 1000);
   char* padding;
-
-  if(decimal < 10)
-    padding = "00";
-  else if(decimal < 100)
-    padding = "0";
-  else
-    padding = "";
+  if(decimal < 10) padding = "00";
+  else if(decimal < 100) padding = "0";
+  else padding = "";
 
   cprintf("%d\t%s\t\t%d.%s%d\t\t%s\t%d", p->pid, p->name, second, padding, decimal, state, p->sz);
+}
+
+void
+procdumpP2(struct proc* p, char* state)
+{
+  uint ppid = 0;
+  if(p->parent) ppid = p->parent->pid;
+
+  uint et = ticks - p->start_ticks; // Elapsed time
+  uint eseconds = et / 1000;
+  uint edecimal = et - (eseconds * 1000);
+  char* epadding;
+  if(edecimal < 10) epadding = "00";
+  else if(edecimal < 100) epadding = "0";
+  else epadding = "";
+
+  uint ct = p->cpu_ticks_total; // CPU time
+  uint cseconds = ct / 1000;
+  uint cdecimal = ct - (cseconds * 1000);
+  char* cpadding;
+  if(cdecimal < 10) cpadding = "00";
+  else if(cdecimal < 100) cpadding = "0";
+  else cpadding = "";
+ 
+  cprintf("%d\t%s\t     %d\t%d\t%d\t%d.%s%d\t%d.%s%d\t%s\t%d\t",
+    p->pid,
+    p->name,
+    p->uid,
+    p->gid,
+    ppid,
+    eseconds,
+    epadding,
+    edecimal,
+    cseconds,
+    cpadding,
+    cdecimal,
+    state,
+    p->sz);
 }
 
 void
@@ -594,3 +638,37 @@ procdump(void)
   cprintf("$ ");  // simulate shell prompt
 #endif // CS333_P1
 }
+
+#ifdef CS333_P2
+int
+sys_getprocs(void)
+{
+  uint max, i;
+  struct uproc* table;
+  struct proc* p;
+
+  if(argptr(0, (void*) &max, sizeof(uint)) < 0) return -1;
+  if(argptr(1, (void*) &table, sizeof(struct uproc*)) < 0) return -1;
+
+  acquire(&ptable.lock);
+  for(i = 0, p = ptable.proc; i < max && p < &ptable.proc[NPROC]; p++){
+    if(p->state == UNUSED || p->state == EMBRYO) continue;
+
+    table[i].pid = p->pid;
+    table[i].uid = p->uid;
+    table[i].gid = p->gid;
+    if(!p->parent) table[i].ppid = 0;
+    else table[i].ppid = p->parent->pid;
+    table[i].elapsed_ticks = (ticks - p->start_ticks);
+    table[i].CPU_total_ticks = p->cpu_ticks_total;
+    table[i].size = p->sz;
+
+    safestrcpy(table[i].name, p->name, strlen(p->name) + 1);
+    safestrcpy(table[i].state, states[p->state], strlen(states[p->state]) + 1);
+    if(p->pid != 0) ++i;
+  }
+  release(&ptable.lock);
+
+  return i;
+}
+#endif

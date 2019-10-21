@@ -50,6 +50,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   uint start_ticks;            // Tick at which the process started
+  
+  uint uid;			// The user id that owns the process
+  uint gid;			// The group id that owns the process
+
+  uint cpu_ticks_total;		// Total elapesd ticks
+  uint cpu_ticks_in;		// Ticks when scheduled
 };
 
 // Process memory is laid out contiguously, low addresses first:

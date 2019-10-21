@@ -24,4 +24,7 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
+#define DEF_UID 101
+#define DEF_GID 102
+
 #endif  // PDX_INCLUDE

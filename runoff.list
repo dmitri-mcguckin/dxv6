@@ -9,6 +9,7 @@ mmu.h
 elf.h
 pdx.h
 pdx-kernel.h
+uproc.h
 
 # entering xv6
 entry.S
