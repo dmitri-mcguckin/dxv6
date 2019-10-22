@@ -7,11 +7,30 @@
 #include "syscall.h"
 #include "traps.h"
 #include "memlayout.h"
+#include "uproc.h"
 
 char buf[8192];
 char name[3];
 char *echoargv[] = { "echo", "ALL", "TESTS", "PASSED", 0 };
 int stdout = 1;
+
+void
+proctest(int proc_count, int max)
+{
+  char* cmd = "dummy";
+  char** args = NULL;
+  struct uproc* procs = (struct uproc*) malloc(max * sizeof(struct uproc));
+
+  // Spin up dummy processes
+  for(int i = 0; i < proc_count; ++i) exec(cmd, args);
+
+  // Check the procs table
+  uint status = getprocs(max, procs);
+
+  // Check the test condition
+  if(status == max) printf(stdout, "getprocs test for %d processes passed\n", max);
+  else printf(stdout, "getprocs test for %d processes failed\n\tgot %d procs instead.\n", max, status);
+}
 
 // does chdir() call iput(p->cwd) in a transaction?
 void
@@ -1750,7 +1769,7 @@ main(int argc, char *argv[])
 {
   printf(1, "usertests starting\n");
 
-  if(open("usertests.ran", 0) >= 0){
+  /*if(open("usertests.ran", 0) >= 0){
     printf(1, "already ran user tests -- rebuild fs.img\n");
     exit();
   }
@@ -1797,7 +1816,12 @@ main(int argc, char *argv[])
 
   uio();
 
-  exectest();
+  exectest();*/
+
+  proctest(1, 1);
+  proctest(24, 16);
+  proctest(72, 64);
+  proctest(128, 72);
 
   exit();
 }
