@@ -22,7 +22,11 @@ proctest(int proc_count, int max)
   struct uproc* procs = (struct uproc*) malloc(max * sizeof(struct uproc));
 
   // Spin up dummy processes
-  for(int i = 0; i < proc_count; ++i) exec(cmd, args);
+  for(int i = 0; i < proc_count; ++i){
+          uint pid = fork();
+          if(pid == 0) exec(cmd, args);
+  }
+  wait();
 
   // Check the procs table
   uint status = getprocs(max, procs);
