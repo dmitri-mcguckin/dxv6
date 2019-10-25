@@ -1773,7 +1773,7 @@ main(int argc, char *argv[])
 {
   printf(1, "usertests starting\n");
 
-  /*if(open("usertests.ran", 0) >= 0){
+  if(open("usertests.ran", 0) >= 0){
     printf(1, "already ran user tests -- rebuild fs.img\n");
     exit();
   }
@@ -1820,12 +1820,7 @@ main(int argc, char *argv[])
 
   uio();
 
-  exectest();*/
-
-  proctest(1, 1);
-  proctest(24, 16);
-  proctest(72, 64);
-  proctest(128, 72);
+  exectest();
 
   exit();
 }

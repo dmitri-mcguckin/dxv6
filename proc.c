@@ -123,9 +123,13 @@ allocproc(void)
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+#ifdef CS33_P1
   p->start_ticks = ticks;
+#endif
+#ifdef CS333_P2
   p->cpu_ticks_total = 0;
   p->cpu_ticks_in = 0;
+#endif
   return p;
 }
 
@@ -162,8 +166,11 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
   p->state = RUNNABLE;
+#ifdef CS333_P2
   p->uid = DEF_UID;
   p->gid = DEF_GID;
+  p->parent = p;
+#endif
   release(&ptable.lock);
 }
 
@@ -641,14 +648,10 @@ procdump(void)
 
 #ifdef CS333_P2
 int
-sys_getprocs(void)
+getproc(uint max, struct uproc* table)
 {
-  uint max, i;
-  struct uproc* table;
+  uint i;
   struct proc* p;
-
-  if(argptr(0, (void*) &max, sizeof(uint)) < 0) return -1;
-  if(argptr(1, (void*) &table, sizeof(struct uproc*)) < 0) return -1;
 
   acquire(&ptable.lock);
   for(i = 0, p = ptable.proc; i < max && p < &ptable.proc[NPROC]; p++){

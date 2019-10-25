@@ -164,4 +164,15 @@ sys_setgid(void)
   p->gid = new_gid;
   return myproc()->gid;
 }
+
+int
+sys_getprocs(void)
+{
+  uint max;
+  struct uproc* table;
+
+  if(argint(0, (int*) &max) < 0) return -1;
+  if(argptr(1, (void*) &table, sizeof(struct uproc*)) < 0) return -1;
+  return getproc(max, table);
+}
 #endif

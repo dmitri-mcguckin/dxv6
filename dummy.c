@@ -3,7 +3,7 @@
 #include "user.h"
 
 #define stdout 1
-#define TIME 60000
+#define TIME 4000
 
 int
 main(int argc, char* argv[])

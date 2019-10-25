@@ -45,6 +45,7 @@ main(int argc, char* argv[])
       procs[i].size);
   }
 
+  free(procs);
   exit();
 }
 #endif

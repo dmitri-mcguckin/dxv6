@@ -1,3 +1,7 @@
+#ifdef CS333_P2
+struct uproc;
+#endif
+
 struct buf;
 struct context;
 struct file;
@@ -124,6 +128,9 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+#ifdef CS333_P2
+int getproc(uint, struct uproc*);
+#endif
 
 // swtch.S
 void            swtch(struct context**, struct context*);
