@@ -14,28 +14,6 @@ char name[3];
 char *echoargv[] = { "echo", "ALL", "TESTS", "PASSED", 0 };
 int stdout = 1;
 
-void
-proctest(int proc_count, int max)
-{
-  char* cmd = "dummy";
-  char** args = NULL;
-  struct uproc* procs = (struct uproc*) malloc(max * sizeof(struct uproc));
-
-  // Spin up dummy processes
-  for(int i = 0; i < proc_count; ++i){
-          uint pid = fork();
-          if(pid == 0) exec(cmd, args);
-  }
-  wait();
-
-  // Check the procs table
-  uint status = getprocs(max, procs);
-
-  // Check the test condition
-  if(status == max) printf(stdout, "getprocs test for %d processes passed\n", max);
-  else printf(stdout, "getprocs test for %d processes failed\n\tgot %d procs instead.\n", max, status);
-}
-
 // does chdir() call iput(p->cwd) in a transaction?
 void
 iputtest(void)

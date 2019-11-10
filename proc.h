@@ -56,6 +56,10 @@ struct proc {
 
   uint cpu_ticks_total;		// Total elapesd ticks
   uint cpu_ticks_in;		// Ticks when scheduled
+
+  #ifdef CS333_P3
+  struct proc* next;
+  #endif
 };
 
 // Process memory is laid out contiguously, low addresses first:

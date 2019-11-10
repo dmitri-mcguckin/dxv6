@@ -542,6 +542,7 @@ kill(int pid)
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.
 
+#ifdef CS333_P1
 void
 procdumpP1(struct proc* p, char* state)
 {
@@ -555,7 +556,9 @@ procdumpP1(struct proc* p, char* state)
 
   cprintf("%d\t%s\t\t%d.%s%d\t\t%s\t%d", p->pid, p->name, second, padding, decimal, state, p->sz);
 }
+#endif
 
+#ifdef CS333_P2
 void
 procdumpP2(struct proc* p, char* state)
 {
@@ -593,6 +596,46 @@ procdumpP2(struct proc* p, char* state)
     state,
     p->sz);
 }
+#endif
+
+#ifdef CS333_P3
+void
+procdumpP3(struct proc* p, char* state){
+  uint ppid = 0;
+  if(p->parent) ppid = p->parent->pid;
+
+  uint et = ticks - p->start_ticks; // Elapsed time
+  uint eseconds = et / 1000;
+  uint edecimal = et - (eseconds * 1000);
+  char* epadding;
+  if(edecimal < 10) epadding = "00";
+  else if(edecimal < 100) epadding = "0";
+  else epadding = "";
+
+  uint ct = p->cpu_ticks_total; // CPU time
+  uint cseconds = ct / 1000;
+  uint cdecimal = ct - (cseconds * 1000);
+  char* cpadding;
+  if(cdecimal < 10) cpadding = "00";
+  else if(cdecimal < 100) cpadding = "0";
+  else cpadding = "";
+ 
+  cprintf("%d\t%s\t     %d\t%d\t%d\t%d.%s%d\t%d.%s%d\t%s\t%d\t",
+    p->pid,
+    p->name,
+    p->uid,
+    p->gid,
+    ppid,
+    eseconds,
+    epadding,
+    edecimal,
+    cseconds,
+    cpadding,
+    cdecimal,
+    state,
+    p->sz);
+}
+#endif
 
 void
 procdump(void)
