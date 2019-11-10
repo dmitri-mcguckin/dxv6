@@ -129,7 +129,6 @@ allocproc(void)
   #ifdef CS333_P3
   stateListRemove(&ptable.list[UNUSED], p);
   stateListAdd(&ptable.list[EMBRYO], p);
-
   assertState(p, EMBRYO, __FUNCTION__, __LINE__);
   #endif // CS333_P3
 
@@ -143,6 +142,7 @@ allocproc(void)
 
     #ifdef CS333_P3
     stateListAdd(&ptable.list[UNUSED], p);
+    assertState(p, UNUSED, __FUNCTION__, __LINE__);
     #endif
 
     release(&ptable.lock);
@@ -219,13 +219,6 @@ userinit(void)
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
-  p->state = RUNNABLE;
-
-  #ifdef CS333_P3
-  stateListRemove(&ptable.list[EMBRYO], p);
-  stateListAdd(&ptable.list[RUNNABLE], p);
-  assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
-  #endif
 
   #ifdef CS333_P2
   p->uid = DEF_UID;
@@ -233,6 +226,13 @@ userinit(void)
   p->parent = p;
   #endif
 
+  p->state = RUNNABLE;
+
+  #ifdef CS333_P3
+  stateListRemove(&ptable.list[EMBRYO], p);
+  stateListAdd(&ptable.list[RUNNABLE], p);
+  assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
+  #endif
   release(&ptable.lock);
 }
 
@@ -370,6 +370,7 @@ exit(void)
   stateListAdd(&ptable.list[ZOMBIE], curproc);
   assertState(curproc, ZOMBIE, __FUNCTION__, __LINE__);
   #endif
+  //release(&ptable.lock);
 
   #ifdef PDX_XV6
   curproc->sz = 0;
@@ -428,7 +429,7 @@ exit(void)
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 #ifdef CS333_P3 // New wait()
-int
+/*int
 wait(void)
 {
   struct proc *p;
@@ -473,7 +474,7 @@ wait(void)
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
 }
-#else // Old wait()
+#else // Old wait()*/
 int
 wait(void)
 {
