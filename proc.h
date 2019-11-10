@@ -1,3 +1,5 @@
+#ifndef PROC_H
+#define PROC_H
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -51,14 +53,18 @@ struct proc {
   char name[16];               // Process name (debugging)
   uint start_ticks;            // Tick at which the process started
   
-  uint uid;			// The user id that owns the process
-  uint gid;			// The group id that owns the process
+  #ifdef CS333_P1
+  uint uid;                     // The user id that owns the process
+  uint gid;                     // The group id that owns the process
+  #endif
 
-  uint cpu_ticks_total;		// Total elapesd ticks
-  uint cpu_ticks_in;		// Ticks when scheduled
+  #ifdef CS333_P2
+  uint cpu_ticks_total;         // Total elapesd ticks
+  uint cpu_ticks_in;            // Ticks when scheduled
+  #endif
 
   #ifdef CS333_P3
-  struct proc* next;
+  struct proc* next;            // Next pointer for... something...
   #endif
 };
 
@@ -67,3 +73,4 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+#endif

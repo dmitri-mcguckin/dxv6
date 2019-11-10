@@ -26,6 +26,12 @@ struct ptrs {
 
 #define statecount NELEM(states)
 
+// list management function prototypes
+static void initProcessLists(void);
+static void initFreeList(void);
+static void stateListAdd(struct ptrs*, struct proc*);
+static int  stateListRemove(struct ptrs*, struct proc* p);
+static void assertState(struct proc*, enum procstate, const char *, int);
 #endif
 
 static struct {
@@ -113,6 +119,14 @@ allocproc(void)
     return 0;
   }
   p->state = EMBRYO;
+
+  #ifdef CS333_P3
+  stateListRemove(&ptable.list[UNUSED], p);
+  stateListAdd(&ptable.list[EMBRYO], p);
+
+  assertState(p, EMBRYO, __FUNCTION__, __LINE__);
+  #endif
+
   p->pid = nextpid++;
   release(&ptable.lock);
 
@@ -152,6 +166,11 @@ allocproc(void)
 void
 userinit(void)
 {
+  #ifdef CS333_P3
+  initProcessLists();
+  initFreeList();
+  #endif
+
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
@@ -180,11 +199,19 @@ userinit(void)
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
   p->state = RUNNABLE;
-#ifdef CS333_P2
+
+  #ifdef CS333_P2
   p->uid = DEF_UID;
   p->gid = DEF_GID;
   p->parent = p;
-#endif
+  #endif
+
+  #ifdef CS333_P3
+  stateListRemove(&ptable.list[EMBRYO], p);
+  stateListAdd(&ptable.list[RUNNABLE], p);
+  assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
+  #endif
+
   release(&ptable.lock);
 }
 
@@ -453,7 +480,7 @@ wait(void)
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
 #ifdef CS333_P3 // New scheduler()
-void
+/*void
 scheduler(void)
 {
   struct proc *p;
@@ -470,22 +497,29 @@ scheduler(void)
     #ifdef PDX_XV6
     idle = 1;  // assume idle unless we schedule a process
     #endif // PDX_XV6
-    // Loop over process table looking for process to run.
+    // Grab first process out of the RUNNABLE table for a process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+    if(ptable.list[RUNNABLE].head){
+      p = ptable.list[RUNNABLE].head;
+      if(p->state != RUNNABLE) continue;
 
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       #ifdef PDX_XV6
-      idle = 0;  // not idle this timeslice
+      idle = 1;  // not idle this timeslice
       #endif // PDX_XV6
+
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+
+      stateListRemove(&ptable.list[RUNNABLE], p);
+      stateListAdd(&ptable.list[RUNNING], p);
+      assertState(p, RUNNING, __FUNCTION__, __LINE__);
+
       p->cpu_ticks_in = ticks;
+
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -503,7 +537,7 @@ scheduler(void)
     #endif // PDX_XV6
   }
 }
-#else // Old scheduleer()
+#else // Old scheduleer()*/
 void
 scheduler(void)
 {
@@ -654,6 +688,9 @@ sleep(void *chan, struct spinlock *lk)
   p->chan = chan;
   p->state = SLEEPING;
 
+  stateListRemove(&ptable.list[RUNNING], p);
+  stateListAdd(&ptable.list[SLEEPING], p);
+
   sched();
 
   // Tidy up.
@@ -710,9 +747,15 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+  //acquire(&ptable.lock);
+  for(p = ptable.list[SLEEPING].head; p; p = p->next){
+    if(p->chan == chan){
       p->state = RUNNABLE;
+      stateListRemove(&ptable.list[SLEEPING], p);
+      stateListAdd(&ptable.list[RUNNABLE], p);
+    }
+  }
+  //release(&ptable.lock);
 }
 #else // Old wakeup1()
 static void
@@ -959,5 +1002,107 @@ getproc(uint max, struct uproc* table)
   release(&ptable.lock);
 
   return i;
+}
+#endif
+
+#ifdef CS333_P3
+// list management helper functions
+static void
+stateListAdd(struct ptrs* list, struct proc* p) {
+  if((*list).head == NULL){
+    (*list).head = p;
+    (*list).tail = p;
+    p->next = NULL;
+  } else{
+    ((*list).tail)->next = p;
+    (*list).tail = ((*list).tail)->next;
+    ((*list).tail)->next = NULL;
+  }
+}
+
+static int
+stateListRemove(struct ptrs* list, struct proc* p)
+{
+  if((*list).head == NULL || (*list).tail == NULL || p == NULL){
+    return -1;
+  }
+
+  struct proc* current = (*list).head;
+  struct proc* previous = 0;
+
+  if(current == p){
+    (*list).head = ((*list).head)->next;
+    // prevent tail remaining assigned when we've removed the only item
+    // on the list
+    if((*list).tail == p){
+      (*list).tail = NULL;
+    }
+    return 0;
+  }
+
+  while(current){
+    if(current == p){
+      break;
+    }
+
+    previous = current;
+    current = current->next;
+  }
+
+  // Process not found. return error
+  if(current == NULL){
+    return -1;
+  }
+
+  // Process found.
+  if(current == (*list).tail){
+    (*list).tail = previous;
+    ((*list).tail)->next = NULL;
+  } else{
+    previous->next = current->next;
+  }
+
+  // Make sure p->next doesn't point into the list.
+  p->next = NULL;
+
+  return 0;
+}
+
+static void
+initProcessLists(){
+  int i;
+
+  for (i = UNUSED; i <= ZOMBIE; i++) {
+    ptable.list[i].head = NULL;
+    ptable.list[i].tail = NULL;
+  }
+  
+  #ifdef CS333_P4
+  for (i = 0; i <= MAXPRIO; i++) {
+    ptable.ready[i].head = NULL;
+    ptable.ready[i].tail = NULL;
+  }
+  #endif
+}
+
+static void
+initFreeList(void) {
+  struct proc* p;
+
+  for(p = ptable.proc; p < ptable.proc + NPROC; ++p){
+    p->state = UNUSED;
+    stateListAdd(&ptable.list[UNUSED], p);
+  }
+}
+
+// example usage:
+// assertState(p, UNUSED, __FUNCTION__, __LINE__);
+// This code uses gcc preprocessor directives. For details, see
+// https://gcc.gnu.org/onlinedocs/cpp/Standard-Predefined-Macros.html
+static void
+assertState(struct proc *p, enum procstate state, const char * func, int line) {
+  if (p->state == state) return;
+  cprintf("Error: proc state is %s and should be %s.\nCalled from %s line %d\n", states[p->state], states[state], func, line);
+  panic("Error: Process state incorrect in assertState()");
 }
 #endif

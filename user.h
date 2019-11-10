@@ -39,13 +39,16 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
 #ifdef PDX_XV6
 int atoo(const char*);
 int strncmp(const char*, const char*, uint);
 #endif // PDX_XV6
+
 #ifdef CS333_P1
 int date(struct rtcdate*);
 #endif
+
 #ifdef CS333_P2
 uint getuid(void);
 uint getgid(void);
