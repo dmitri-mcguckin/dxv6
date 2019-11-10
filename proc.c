@@ -9,6 +9,7 @@
 
 #include "uproc.h"
 
+
 static char *states[] = {
 [UNUSED]    "unused",
 [EMBRYO]    "embryo",
@@ -17,6 +18,11 @@ static char *states[] = {
 [RUNNING]   "run   ",
 [ZOMBIE]    "zombie"
 };
+
+// debug routines
+#ifdef DEBUG
+static void checkProcs(const char * file, const char * function, int line);
+#endif
 
 #ifdef CS333_P3
 struct ptrs {
@@ -125,14 +131,21 @@ allocproc(void)
   stateListAdd(&ptable.list[EMBRYO], p);
 
   assertState(p, EMBRYO, __FUNCTION__, __LINE__);
-  #endif
+  #endif // CS333_P3
 
   p->pid = nextpid++;
   release(&ptable.lock);
 
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
+    acquire(&ptable.lock);
     p->state = UNUSED;
+
+    #ifdef CS333_P3
+    stateListAdd(&ptable.list[UNUSED], p);
+    #endif
+
+    release(&ptable.lock);
     return 0;
   }
   sp = p->kstack + KSTACKSIZE;
@@ -151,13 +164,19 @@ allocproc(void)
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-#ifdef CS33_P1
+  #ifdef CS33_P1
   p->start_ticks = ticks;
-#endif
-#ifdef CS333_P2
+  #endif
+  
+  #ifdef CS333_P2
   p->cpu_ticks_total = 0;
   p->cpu_ticks_in = 0;
-#endif
+  #endif
+
+  #ifdef DEBUG
+  checkProcs(__FILE__, __FUNCTION__, __LINE__);
+  #endif // Debug
+
   return p;
 }
 
@@ -166,10 +185,12 @@ allocproc(void)
 void
 userinit(void)
 {
+  acquire(&ptable.lock);
   #ifdef CS333_P3
   initProcessLists();
   initFreeList();
   #endif
+  release(&ptable.lock);
 
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
@@ -200,16 +221,16 @@ userinit(void)
   acquire(&ptable.lock);
   p->state = RUNNABLE;
 
-  #ifdef CS333_P2
-  p->uid = DEF_UID;
-  p->gid = DEF_GID;
-  p->parent = p;
-  #endif
-
   #ifdef CS333_P3
   stateListRemove(&ptable.list[EMBRYO], p);
   stateListAdd(&ptable.list[RUNNABLE], p);
   assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
+  #endif
+
+  #ifdef CS333_P2
+  p->uid = DEF_UID;
+  p->gid = DEF_GID;
+  p->parent = p;
   #endif
 
   release(&ptable.lock);
@@ -254,9 +275,18 @@ fork(void)
 
   // Copy process state from proc.
   if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+    acquire(&ptable.lock);
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
+
+    #ifdef CS333_P3
+    stateListRemove(&ptable.list[EMBRYO], np);
+    stateListAdd(&ptable.list[UNUSED], np);
+    assertState(np, UNUSED, __FUNCTION__, __LINE__);
+    #endif
+
+    release(&ptable.lock);
     return -1;
   }
   np->sz = curproc->sz;
@@ -279,6 +309,13 @@ fork(void)
 
   acquire(&ptable.lock);
   np->state = RUNNABLE;
+
+  #ifdef CS333_P3
+  stateListRemove(&ptable.list[EMBRYO], np);
+  stateListAdd(&ptable.list[RUNNABLE], np);
+  assertState(np, RUNNABLE, __FUNCTION__, __LINE__);
+  #endif
+
   release(&ptable.lock);
 
   return pid;
@@ -327,6 +364,13 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+
+  #ifdef CS333_P3
+  stateListRemove(&ptable.list[RUNNING], curproc);
+  stateListAdd(&ptable.list[ZOMBIE], curproc);
+  assertState(curproc, ZOMBIE, __FUNCTION__, __LINE__);
+  #endif
+
   #ifdef PDX_XV6
   curproc->sz = 0;
   #endif // PDX_XV6
@@ -394,13 +438,11 @@ wait(void)
 
   acquire(&ptable.lock);
   for(;;){
-    // Scan through table looking for exited children.
+    // Scan through zombie table looking for children.
     havekids = 0;
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent != curproc)
-        continue;
-      havekids = 1;
-      if(p->state == ZOMBIE){
+    for(p = ptable.list[ZOMBIE].head; p != NULL; p = p-> next){
+      if(p->parent == curproc){
+        havekids = 1;
         // Found one.
         pid = p->pid;
         kfree(p->kstack);
@@ -411,6 +453,11 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+
+        stateListRemove(&ptable.list[ZOMBIE], p);
+        stateListAdd(&ptable.list[UNUSED], p);
+        assertState(p, UNUSED, __FUNCTION__, __LINE__);
+
         release(&ptable.lock);
         return pid;
       }
@@ -690,6 +737,7 @@ sleep(void *chan, struct spinlock *lk)
 
   stateListRemove(&ptable.list[RUNNING], p);
   stateListAdd(&ptable.list[SLEEPING], p);
+  assertState(p, SLEEPING, __FUNCTION__, __LINE__);
 
   sched();
 
@@ -747,15 +795,14 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  //acquire(&ptable.lock);
   for(p = ptable.list[SLEEPING].head; p; p = p->next){
     if(p->chan == chan){
       p->state = RUNNABLE;
       stateListRemove(&ptable.list[SLEEPING], p);
       stateListAdd(&ptable.list[RUNNABLE], p);
+      assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
     }
   }
-  //release(&ptable.lock);
 }
 #else // Old wakeup1()
 static void
@@ -1104,5 +1151,43 @@ assertState(struct proc *p, enum procstate state, const char * func, int line) {
   if (p->state == state) return;
   cprintf("Error: proc state is %s and should be %s.\nCalled from %s line %d\n", states[p->state], states[state], func, line);
   panic("Error: Process state incorrect in assertState()");
+}
+#endif
+
+// debug routines
+#ifdef DEBUG
+static int
+procLookup(struct proc *p, struct proc *np){
+  while (np != NULL) {
+    if (np == p) return 1;
+    np = np->next;
+  }
+  return 0;
+}
+
+static int
+findProc(struct proc *p){
+  if (procLookup(p, ptable.list[UNUSED].head)   != 0) return 1;
+  if (procLookup(p, ptable.list[EMBRYO].head)   != 0) return 1;
+  if (procLookup(p, ptable.list[RUNNING].head)  != 0) return 1;
+  if (procLookup(p, ptable.list[SLEEPING].head) != 0) return 1;
+  if (procLookup(p, ptable.list[ZOMBIE].head)   != 0) return 1;
+  for (int i=0; i<=statecount; i++)
+  if (procLookup(p, ptable.ready[i].head) != 0) return 1;
+
+  return 0; // not found
+}
+
+static void
+checkProcs(const char *file, const char *func, int line){
+  int found;
+  struct proc *p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    found = findProc(p);
+    if (found) continue;
+    cprintf("checkprocs error. Called from %s, %s, @ %d\n", file, func, line);
+    panic("Process array and lists inconsistent\n");
+  }
 }
 #endif

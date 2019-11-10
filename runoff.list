@@ -100,7 +100,6 @@ testuidgid.c
 testuidgid.txt
 p2testsuite.c
 p2-test.c
+p3-test.c
 p4-test.c
 proc-tests.c
-list_management.c
-debug.c
