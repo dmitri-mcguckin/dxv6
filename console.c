@@ -201,7 +201,7 @@ do_shutdown()
 void
 consoleintr(int (*getc)(void))
 {
-  int c, doprocdump = 0;
+  int c, doprocdump = 0, doreadydump = 0, dofreedump = 0, dosleepdump = 0, dozombiedump = 0;
 #ifdef PDX_XV6
   int shutdown = FALSE;
 #endif // PDX_XV6
@@ -213,11 +213,25 @@ consoleintr(int (*getc)(void))
       // procdump() locks cons.lock indirectly; invoke later
       doprocdump = 1;
       break;
-#ifdef PDX_XV6
+    #ifdef PDX_XV6
     case C('D'):
       shutdown = TRUE;
       break;
-#endif // PDX_XV6
+    #endif // PDX_XV6
+    #ifdef CS333_P3
+    case C('R'):  // Process listing.
+      doreadydump = 1;
+      break;
+    case C('F'):  // Process listing.
+      dofreedump = 1;
+      break;
+    case C('S'):  // Process listing.
+      dosleepdump = 1;
+      break;
+    case C('Z'):  // Process listing.
+      dozombiedump = 1;
+      break;
+    #endif
     case C('U'):  // Kill line.
       while(input.e != input.w &&
             input.buf[(input.e-1) % INPUT_BUF] != '\n'){
@@ -244,6 +258,12 @@ consoleintr(int (*getc)(void))
       break;
     }
   }
+
+  if(doreadydump){ readydump(); }
+  else if(dofreedump){ freedump(); }
+  else if(dosleepdump){ sleepdump(); }
+  else if(dozombiedump){ zombiedump(); }
+
   release(&cons.lock);
 #ifdef PDX_XV6
   if (shutdown)

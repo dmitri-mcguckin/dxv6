@@ -429,7 +429,7 @@ exit(void)
 // Wait for a child process to exit and return its pid.
 // Return -1 if this process has no children.
 #ifdef CS333_P3 // New wait()
-/*int
+int
 wait(void)
 {
   struct proc *p;
@@ -441,26 +441,30 @@ wait(void)
   for(;;){
     // Scan through zombie table looking for children.
     havekids = 0;
-    for(p = ptable.list[ZOMBIE].head; p != NULL; p = p-> next){
-      if(p->parent == curproc){
+    for(enum procstate state = EMBRYO; state <= ZOMBIE; ++state){
+      for(p = ptable.list[state].head; p; p = p->next){
+        if(p->parent != curproc)
+          continue;
         havekids = 1;
-        // Found one.
-        pid = p->pid;
-        kfree(p->kstack);
-        p->kstack = 0;
-        freevm(p->pgdir);
-        p->pid = 0;
-        p->parent = 0;
-        p->name[0] = 0;
-        p->killed = 0;
-        p->state = UNUSED;
+        if(p->state == ZOMBIE){
+          // Found one.
+          pid = p->pid;
+          kfree(p->kstack);
+          p->kstack = 0;
+          freevm(p->pgdir);
+          p->pid = 0;
+          p->parent = 0;
+          p->name[0] = 0;
+          p->killed = 0;
+          p->state = UNUSED;
 
-        stateListRemove(&ptable.list[ZOMBIE], p);
-        stateListAdd(&ptable.list[UNUSED], p);
-        assertState(p, UNUSED, __FUNCTION__, __LINE__);
+          stateListRemove(&ptable.list[ZOMBIE], p);
+          stateListAdd(&ptable.list[UNUSED], p);
+          assertState(p, UNUSED, __FUNCTION__, __LINE__);
 
-        release(&ptable.lock);
-        return pid;
+          release(&ptable.lock);
+          return pid;
+        }
       }
     }
 
@@ -474,7 +478,7 @@ wait(void)
     sleep(curproc, &ptable.lock);  //DOC: wait-sleep
   }
 }
-#else // Old wait()*/
+#else // Old wait()
 int
 wait(void)
 {
@@ -528,7 +532,7 @@ wait(void)
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
 #ifdef CS333_P3 // New scheduler()
-/*void
+void
 scheduler(void)
 {
   struct proc *p;
@@ -674,6 +678,13 @@ yield(void)
 
   acquire(&ptable.lock);  //DOC: yieldlock
   curproc->state = RUNNABLE;
+
+  #ifdef CS333_P3
+  stateListRemove(&ptable.list[RUNNING], curproc);
+  stateListAdd(&ptable.list[RUNNABLE], curproc);
+  assertState(curproc, RUNNABLE, __FUNCTION__, __LINE__);
+  #endif
+
   sched();
   release(&ptable.lock);
 }
@@ -836,14 +847,21 @@ kill(int pid)
   struct proc *p;
 
   acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid){
-      p->killed = 1;
-      // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
-      release(&ptable.lock);
-      return 0;
+  for(enum procstate state = EMBRYO; state <= RUNNING; ++state){
+    for(p = ptable.list[state].head; p; p = p->next){
+      if(p->pid == pid){
+        p->killed = 1;
+        // Wake process from sleep if necessary.
+        if(p->state == SLEEPING){
+          p->state = RUNNABLE;
+
+          stateListRemove(&ptable.list[SLEEPING], p);
+          stateListAdd(&ptable.list[RUNNABLE], p);
+          assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
+        }
+        release(&ptable.lock);
+        return 0;
+      }
     }
   }
   release(&ptable.lock);
@@ -1022,6 +1040,55 @@ procdump(void)
   cprintf("$ ");  // simulate shell prompt
 #endif // CS333_P1
 }
+
+#ifdef CS333_P3
+void
+readydump(void){
+  struct proc* p;
+  char* state;
+
+  #if defined(CS333_P4)
+  #define HEADER "\nPID\tName         UID\tGID\tPPID\tPrio\tElapsed\tCPU\tState\tSize\t PCs\n"
+  #elif defined(CS333_P3)
+  #define HEADER "\nPID\tName         UID\tGID\tPPID\tElapsed\tCPU\tState\tSize\t PCs\n"
+  #elif defined(CS333_P2)
+  #define HEADER "\nPID\tName         UID\tGID\tPPID\tElapsed\tCPU\tState\tSize\t PCs\n"
+  #elif defined(CS333_P1)
+  #define HEADER "\nPID\tName            Elapsed\t\tState\tSize\t PCs\n"
+  #else
+  #define HEADER "\n"
+  #endif
+
+  acquire(&ptable.lock);
+  for(p = ptable.list[RUNNABLE].head; p; p = p->next){
+    if(p->state >= 0 && p->state < NELEM(states) && states[p->state]) state = states[p->state];
+    else state = "???";
+
+    #if defined(CS333_P3)
+    procdumpP3(p, state);
+    #elif defined(CS333_P2)
+    procdumpP2(p, state);
+    #elif defined(CS333_P1)
+    procdumpP1(p, state);
+    #else
+    cprintf("%d\t%s\t%s\t", p->pid, p->name, state);
+    #endif
+    
+    cprintf("\n");
+  }
+  release(&ptable.lock);
+  cprintf("$ ");
+}
+
+void
+freedump(void){}
+
+void
+sleepdump(void){}
+
+void
+zombiedump(void){}
+#endif
 
 #ifdef CS333_P2
 int
