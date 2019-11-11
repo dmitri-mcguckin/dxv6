@@ -124,12 +124,12 @@ allocproc(void)
     release(&ptable.lock);
     return 0;
   }
-  p->state = EMBRYO;
 
   #ifdef CS333_P3
   stateListRemove(&ptable.list[UNUSED], p);
+  assertState(p, UNUSED, __FUNCTION__, __LINE__);
+  p->state = EMBRYO;
   stateListAdd(&ptable.list[EMBRYO], p);
-  assertState(p, EMBRYO, __FUNCTION__, __LINE__);
   #endif // CS333_P3
 
   p->pid = nextpid++;
@@ -138,11 +138,12 @@ allocproc(void)
   // Allocate kernel stack.
   if((p->kstack = kalloc()) == 0){
     acquire(&ptable.lock);
-    p->state = UNUSED;
 
     #ifdef CS333_P3
+    stateListRemove(&ptable.list[EMBRYO], p);
+    assertState(p, EMBRYO, __FUNCTION__, __LINE__);
+    p->state = UNUSED;
     stateListAdd(&ptable.list[UNUSED], p);
-    assertState(p, UNUSED, __FUNCTION__, __LINE__);
     #endif
 
     release(&ptable.lock);
@@ -226,13 +227,14 @@ userinit(void)
   p->parent = p;
   #endif
 
-  p->state = RUNNABLE;
 
   #ifdef CS333_P3
   stateListRemove(&ptable.list[EMBRYO], p);
+  assertState(p, EMBRYO, __FUNCTION__, __LINE__);
+  p->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], p);
-  assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
   #endif
+
   release(&ptable.lock);
 }
 
@@ -278,12 +280,12 @@ fork(void)
     acquire(&ptable.lock);
     kfree(np->kstack);
     np->kstack = 0;
-    np->state = UNUSED;
 
     #ifdef CS333_P3
     stateListRemove(&ptable.list[EMBRYO], np);
+    assertState(np, EMBRYO, __FUNCTION__, __LINE__);
+    np->state = UNUSED;
     stateListAdd(&ptable.list[UNUSED], np);
-    assertState(np, UNUSED, __FUNCTION__, __LINE__);
     #endif
 
     release(&ptable.lock);
@@ -308,12 +310,12 @@ fork(void)
   pid = np->pid;
 
   acquire(&ptable.lock);
-  np->state = RUNNABLE;
 
   #ifdef CS333_P3
   stateListRemove(&ptable.list[EMBRYO], np);
+  assertState(np, EMBRYO, __FUNCTION__, __LINE__);
+  np->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], np);
-  assertState(np, RUNNABLE, __FUNCTION__, __LINE__);
   #endif
 
   release(&ptable.lock);
@@ -363,12 +365,12 @@ exit(void)
   }
 
   // Jump into the scheduler, never to return.
-  curproc->state = ZOMBIE;
 
   #ifdef CS333_P3
   stateListRemove(&ptable.list[RUNNING], curproc);
+  assertState(curproc, RUNNING, __FUNCTION__, __LINE__);
+  curproc->state = ZOMBIE;
   stateListAdd(&ptable.list[ZOMBIE], curproc);
-  assertState(curproc, ZOMBIE, __FUNCTION__, __LINE__);
   #endif
   //release(&ptable.lock);
 
@@ -456,11 +458,11 @@ wait(void)
           p->parent = 0;
           p->name[0] = 0;
           p->killed = 0;
-          p->state = UNUSED;
 
           stateListRemove(&ptable.list[ZOMBIE], p);
+          assertState(p, ZOMBIE, __FUNCTION__, __LINE__);
+          p->state = UNUSED;
           stateListAdd(&ptable.list[UNUSED], p);
-          assertState(p, UNUSED, __FUNCTION__, __LINE__);
 
           release(&ptable.lock);
           return pid;
@@ -564,11 +566,11 @@ scheduler(void)
 
       c->proc = p;
       switchuvm(p);
-      p->state = RUNNING;
 
       stateListRemove(&ptable.list[RUNNABLE], p);
+      assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
+      p->state = RUNNING;
       stateListAdd(&ptable.list[RUNNING], p);
-      assertState(p, RUNNING, __FUNCTION__, __LINE__);
 
       p->cpu_ticks_in = ticks;
 
@@ -677,12 +679,12 @@ yield(void)
   struct proc *curproc = myproc();
 
   acquire(&ptable.lock);  //DOC: yieldlock
-  curproc->state = RUNNABLE;
 
   #ifdef CS333_P3
   stateListRemove(&ptable.list[RUNNING], curproc);
+  assertState(curproc, RUNNING, __FUNCTION__, __LINE__);
+  curproc->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], curproc);
-  assertState(curproc, RUNNABLE, __FUNCTION__, __LINE__);
   #endif
 
   sched();
@@ -745,11 +747,11 @@ sleep(void *chan, struct spinlock *lk)
   }
   // Go to sleep.
   p->chan = chan;
-  p->state = SLEEPING;
 
   stateListRemove(&ptable.list[RUNNING], p);
+  assertState(p, RUNNING, __FUNCTION__, __LINE__);
+  p->state = SLEEPING;
   stateListAdd(&ptable.list[SLEEPING], p);
-  assertState(p, SLEEPING, __FUNCTION__, __LINE__);
 
   sched();
 
@@ -809,10 +811,10 @@ wakeup1(void *chan)
 
   for(p = ptable.list[SLEEPING].head; p; p = p->next){
     if(p->chan == chan){
-      p->state = RUNNABLE;
       stateListRemove(&ptable.list[SLEEPING], p);
+      assertState(p, SLEEPING, __FUNCTION__, __LINE__);
+      p->state = RUNNABLE;
       stateListAdd(&ptable.list[RUNNABLE], p);
-      assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
     }
   }
 }
@@ -853,11 +855,10 @@ kill(int pid)
         p->killed = 1;
         // Wake process from sleep if necessary.
         if(p->state == SLEEPING){
-          p->state = RUNNABLE;
-
           stateListRemove(&ptable.list[SLEEPING], p);
+          assertState(p, SLEEPING, __FUNCTION__, __LINE__);
+          p->state = RUNNABLE;
           stateListAdd(&ptable.list[RUNNABLE], p);
-          assertState(p, RUNNABLE, __FUNCTION__, __LINE__);
         }
         release(&ptable.lock);
         return 0;
@@ -1019,15 +1020,15 @@ procdump(void)
     else
       state = "???";
 
-#if defined(CS333_P3)
+    #if defined(CS333_P3)
     procdumpP3(p, state);
-#elif defined(CS333_P2)
+    #elif defined(CS333_P2)
     procdumpP2(p, state);
-#elif defined(CS333_P1)
+    #elif defined(CS333_P1)
     procdumpP1(p, state);
-#else
+    #else
     cprintf("%d\t%s\t%s\t", p->pid, p->name, state);
-#endif
+    #endif
 
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
@@ -1045,49 +1046,41 @@ procdump(void)
 void
 readydump(void){
   struct proc* p;
-  char* state;
 
-  #if defined(CS333_P4)
-  #define HEADER "\nPID\tName         UID\tGID\tPPID\tPrio\tElapsed\tCPU\tState\tSize\t PCs\n"
-  #elif defined(CS333_P3)
-  #define HEADER "\nPID\tName         UID\tGID\tPPID\tElapsed\tCPU\tState\tSize\t PCs\n"
-  #elif defined(CS333_P2)
-  #define HEADER "\nPID\tName         UID\tGID\tPPID\tElapsed\tCPU\tState\tSize\t PCs\n"
-  #elif defined(CS333_P1)
-  #define HEADER "\nPID\tName            Elapsed\t\tState\tSize\t PCs\n"
-  #else
-  #define HEADER "\n"
-  #endif
-
-  acquire(&ptable.lock);
+  cprintf("\nReady List Processes:\n");
   for(p = ptable.list[RUNNABLE].head; p; p = p->next){
-    if(p->state >= 0 && p->state < NELEM(states) && states[p->state]) state = states[p->state];
-    else state = "???";
-
-    #if defined(CS333_P3)
-    procdumpP3(p, state);
-    #elif defined(CS333_P2)
-    procdumpP2(p, state);
-    #elif defined(CS333_P1)
-    procdumpP1(p, state);
-    #else
-    cprintf("%d\t%s\t%s\t", p->pid, p->name, state);
-    #endif
-    
-    cprintf("\n");
+    cprintf("%d", p->pid);
+    if(p->next) cprintf(" -> ");
   }
-  release(&ptable.lock);
-  cprintf("$ ");
+  cprintf("\n$ ");
 }
 
 void
-freedump(void){}
+freedump(void){
+  uint i = 0;
+  for(struct proc* p = ptable.list[UNUSED].head; p; p = p->next){ ++i; }
+  cprintf("Free List Size: %d\n$ ", i);
+}
 
 void
-sleepdump(void){}
+sleepdump(void){
+  cprintf("\nSleep List Processes:\n");
+  for(struct proc* p = ptable.list[SLEEPING].head; p; p = p->next){
+    cprintf("%d", p->pid);
+    if(p->next) cprintf(" -> ");
+  }
+  cprintf("\n$ ");
+}
 
 void
-zombiedump(void){}
+zombiedump(void){
+  cprintf("\nZombie List Processes:\n");
+  for(struct proc* p = ptable.list[ZOMBIE].head; p; p = p->next){
+    cprintf("(%d, %d)", p->pid, p->parent->pid);
+    if(p->next) cprintf(" -> ");
+  }
+  cprintf("\n$ ");
+}
 #endif
 
 #ifdef CS333_P2

@@ -259,11 +259,6 @@ consoleintr(int (*getc)(void))
     }
   }
 
-  if(doreadydump){ readydump(); }
-  else if(dofreedump){ freedump(); }
-  else if(dosleepdump){ sleepdump(); }
-  else if(dozombiedump){ zombiedump(); }
-
   release(&cons.lock);
 #ifdef PDX_XV6
   if (shutdown)
@@ -272,6 +267,12 @@ consoleintr(int (*getc)(void))
   if(doprocdump) {
     procdump();  // now call procdump() wo. cons.lock held
   }
+  #ifdef CS333_P3
+  else if(doreadydump){ readydump(); }
+  else if(dofreedump){ freedump(); }
+  else if(dosleepdump){ sleepdump(); }
+  else if(dozombiedump){ zombiedump(); }
+  #endif
 }
 
 int
