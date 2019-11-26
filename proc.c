@@ -130,6 +130,8 @@ allocproc(void)
   assertState(p, UNUSED, __FUNCTION__, __LINE__);
   p->state = EMBRYO;
   stateListAdd(&ptable.list[EMBRYO], p);
+  #else
+  p->state = EMBRYO;
   #endif // CS333_P3
 
   p->pid = nextpid++;
@@ -144,6 +146,8 @@ allocproc(void)
     assertState(p, EMBRYO, __FUNCTION__, __LINE__);
     p->state = UNUSED;
     stateListAdd(&ptable.list[UNUSED], p);
+    #else
+    p->state = UNUSED;
     #endif
 
     release(&ptable.lock);
@@ -233,6 +237,8 @@ userinit(void)
   assertState(p, EMBRYO, __FUNCTION__, __LINE__);
   p->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], p);
+  #else
+  p->state = RUNNABLE;
   #endif
 
   release(&ptable.lock);
@@ -286,15 +292,21 @@ fork(void)
     assertState(np, EMBRYO, __FUNCTION__, __LINE__);
     np->state = UNUSED;
     stateListAdd(&ptable.list[UNUSED], np);
+    #else
+    np->state = UNUSED;
     #endif
 
     release(&ptable.lock);
     return -1;
   }
   np->sz = curproc->sz;
+
+  #ifdef CS333_P1
   np->parent = curproc;
   np->uid = curproc->uid;
   np->gid = curproc->gid;
+  #endif
+
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -316,6 +328,8 @@ fork(void)
   assertState(np, EMBRYO, __FUNCTION__, __LINE__);
   np->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], np);
+  #else
+  np->state = RUNNABLE;
   #endif
 
   release(&ptable.lock);
@@ -371,6 +385,8 @@ exit(void)
   assertState(curproc, RUNNING, __FUNCTION__, __LINE__);
   curproc->state = ZOMBIE;
   stateListAdd(&ptable.list[ZOMBIE], curproc);
+  #else
+  curproc->state = ZOMBIE;
   #endif
   //release(&ptable.lock);
 
@@ -482,14 +498,14 @@ wait(void)
 }
 #else // Old wait()
 int
-wait(void)
-{
+wait(void){
   struct proc *p;
   int havekids;
   uint pid;
   struct proc *curproc = myproc();
 
   acquire(&ptable.lock);
+
   for(;;){
     // Scan through table looking for exited children.
     havekids = 0;
@@ -509,6 +525,7 @@ wait(void)
         p->killed = 0;
         p->state = UNUSED;
         release(&ptable.lock);
+
         return pid;
       }
     }
@@ -572,7 +589,9 @@ scheduler(void)
       p->state = RUNNING;
       stateListAdd(&ptable.list[RUNNING], p);
 
+      #ifdef CS333_P1
       p->cpu_ticks_in = ticks;
+      #endif
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
@@ -624,7 +643,11 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      
+      #ifdef CS333_P2
       p->cpu_ticks_in = ticks;
+      #endif
+
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -666,7 +689,11 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
+  
+  #ifdef CS333_P2
   p->cpu_ticks_total += (ticks - p->cpu_ticks_in);
+  #endif
+
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
@@ -685,6 +712,8 @@ yield(void)
   assertState(curproc, RUNNING, __FUNCTION__, __LINE__);
   curproc->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], curproc);
+  #else
+  curproc->state = RUNNABLE;
   #endif
 
   sched();

@@ -201,10 +201,14 @@ do_shutdown()
 void
 consoleintr(int (*getc)(void))
 {
-  int c, doprocdump = 0, doreadydump = 0, dofreedump = 0, dosleepdump = 0, dozombiedump = 0;
-#ifdef PDX_XV6
+  int c, doprocdump = 0;
+  #ifdef CS333_P3
+  int doreadydump = 0, dofreedump = 0, dosleepdump = 0, dozombiedump = 0;
+  #endif
+
+  #ifdef PDX_XV6
   int shutdown = FALSE;
-#endif // PDX_XV6
+  #endif // PDX_XV6
 
   acquire(&cons.lock);
   while((c = getc()) >= 0){
