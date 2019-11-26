@@ -1,4 +1,5 @@
-set expandtab
+set softtabstop=2
 set tabstop=2
 set shiftwidth=2
-colorscheme zellner
+set expandtab
+"colorscheme zellner

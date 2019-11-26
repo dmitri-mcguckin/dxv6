@@ -88,17 +88,17 @@ date.c
 
 time.c
 ps.c
-chown.c
-chgrp.c
-chmod.c
+#chown.c
+#chgrp.c
+#chmod.c
 print_mode.c
 p5-test.c
 p5-test.h
 testsetuid.c
-testSched.c
+#testSched.c
 testuidgid.c
 testuidgid.txt
-p2testsuite.c
+#p2testsuite.c
 p2-test.c
+p3-test.c
 p4-test.c
-proc-tests.c

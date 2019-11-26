@@ -120,6 +120,14 @@ struct cpu*     mycpu(void);
 struct proc*    myproc();
 void            pinit(void);
 void            procdump(void);
+
+#ifdef CS333_P3
+void            readydump(void);
+void            freedump(void);
+void            sleepdump(void);
+void            zombiedump(void);
+#endif
+
 void            scheduler(void) __attribute__((noreturn));
 void            sched(void);
 void            setproc(struct proc*);

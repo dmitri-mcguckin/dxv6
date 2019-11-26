@@ -3,13 +3,27 @@
 #include "user.h"
 
 #define stdout 1
-#define TIME 4000
+#define MILI 1000
+#define TIME 4
+#define WAIT MILI * TIME
 
 int
 main(int argc, char* argv[])
 {
-  printf(stdout, "Sleeping for %d ticks.\n", TIME);
-  sleep(TIME);
+  int sc = fork();
+
+  if(sc < 0){ // Fork failed
+    printf(stdout, "Forke failed!\n");
+  }
+  else if(sc == 0){ // Child
+    printf(stdout, "In child, sleeping for %ds...\n", TIME);
+    sleep(WAIT);
+  }
+  else{ // Parent
+    printf(stdout, "Waiting on child...\n");
+    wait();
+    printf(stdout, "Child done!\n");
+  }
   exit();
 }
 #endif
