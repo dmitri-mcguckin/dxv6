@@ -28,3 +28,7 @@
 #define DEF_GID 102
 
 #endif  // PDX_INCLUDE
+
+#ifndef MAXPRIO
+#define MAXPRIO 3
+#endif // MAXPRIO

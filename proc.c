@@ -47,6 +47,10 @@ static struct {
   #ifdef CS333_P3
   struct ptrs list[statecount];
   #endif
+  #ifdef CS333_P4
+  struct ptrs ready[MAXPRIO + 1];
+  uint PromoteAtTime;
+  #endif
 } ptable;
 
 static struct proc *initproc;
