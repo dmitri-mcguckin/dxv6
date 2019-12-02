@@ -52,6 +52,7 @@ static void initPriorityLists(void);
 static void priorityListAdd(enum procprio, struct proc*);
 static int priorityListRemove(enum procprio, struct proc*);
 
+static void checkPromotion(struct proc*);
 static void checkDemotion(struct proc*);
 #endif
 
@@ -144,7 +145,7 @@ allocproc(void)
     return 0;
   }
 
-  // Give the proc a state
+  // Give the proc its first state
   #ifdef CS333_P3
   stateListRemove(&ptable.list[UNUSED], p);
   assertState(p, UNUSED, __FUNCTION__, __LINE__);
@@ -419,8 +420,8 @@ exit(void)
   #endif
 
   #ifdef CS333_P4
-  curproc->budget -= (ticks - curproc->cpu_ticks_in);
-  checkDemotion(curproc);
+  curproc->budget = 0;
+  priorityListRemove(curproc->priority, curproc);
   #endif
 
   #ifdef PDX_XV6
@@ -601,6 +602,15 @@ scheduler(void)
     #ifdef PDX_XV6
     idle = 1;  // assume idle unless we schedule a process
     #endif // PDX_XV6
+
+    // Check if it's time to promote
+    if((ticks % TICKS_TO_PROMOTE) == 0){
+      for(int prio = 0; prio <= MAXPRIO; ++prio){
+        for(struct proc* p = ptable.ready[prio].head; p; p = p->pnext)
+          checkPromotion(p);
+      }
+    }
+
     // Grab first process out of the RUNNABLE table for a process to run.
     acquire(&ptable.lock);
     if(ptable.list[RUNNABLE].head){
@@ -1401,6 +1411,14 @@ priorityListRemove(enum procprio priority, struct proc* p){
 }
 
 static void
+checkPromotion(struct proc* p){
+  if(!p) return; // If the proc doesn't exist, don't do anything
+
+  if((p->priority + 1) <= MAXPRIO) setpriority(p->pid, p->priority + 1);
+  else setpriority(p->pid, MAXPRIO);
+}
+
+static void
 checkDemotion(struct proc* p){
   if(!p) return; // If the proc doesn't exist, don't do anything
 
@@ -1419,16 +1437,18 @@ setpriority(int pid, int priority) {
   // If invalid priority range, don't try to reset the priority
   if(priority < 0 || priority > (MAXPRIO + 1)) return -2;
 
-  for(enum procprio prio = 0; prio <= MAXPRIO; ++prio){
+  for(int prio = 0; prio <= MAXPRIO; ++prio){
     for(p = ptable.ready[prio].head; p; p = p->pnext){
       if(p->pid == pid){
-        int rc = priorityListRemove(p->priority, p);
-        if(rc < 0) panic("failed to remove proc from priority list");
+        if(p->priority != priority){ // Priority change, do list management
+          int rc = priorityListRemove(p->priority, p);
+          if(rc < 0) panic("failed to remove proc from priority list");
 
-        priorityListAdd(priority, p);
-        p->priority = priority;
+          priorityListAdd(priority, p);
+          p->priority = priority;
+        }
         p->budget = DEFAULT_BUDGET;
-        return p->priority;
+        return 0;
       }
     }
   }
@@ -1442,7 +1462,7 @@ int
 getpriority(int pid) {
   struct proc *p;
 
-  for(enum procprio prio = 0; prio < MAXPRIO; ++prio){
+  for(enum procprio prio = 0; prio <= MAXPRIO; ++prio){
     for(p = ptable.ready[prio].head; p; p = p->pnext){
       if(p->pid == pid) return p->priority;
     }
