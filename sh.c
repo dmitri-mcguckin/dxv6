@@ -167,8 +167,9 @@ setbuiltin(char *p)
     rc = (setgid(i));
     if (rc == 0)
       return 0;
-  } else
-  if (strncmp("prio", p, 4) == 0) {
+  } 
+  #ifdef CS333_P4
+  else if (strncmp("prio", p, 4) == 0) {
     p += strlen("prio");
     while (strncmp(p, " ", 1) == 0) p++; // chomp spaces
     int pid = atoi(p);
@@ -178,6 +179,7 @@ setbuiltin(char *p)
     if (rc >= 0)
       return 0;
   }
+  #endif
   printf(2, "Invalid _set parameter\n");
   return -1;
 }
@@ -195,6 +197,7 @@ getbuiltin(char *p)
     printf(2, "%d\n", getgid());
     return 0;
   }
+  #ifdef CS333_P4
   if (strncmp("prio", p, 4) == 0) {
     p += strlen("prio");
     while(strncmp(p, " ", 1) == 0) p++;
@@ -202,6 +205,7 @@ getbuiltin(char *p)
     printf(2, "%d\n", getpriority(pid));
     return 0;
   }
+  #endif
   printf(2, "Invalid _get parameter\n");
   return -1;
 }

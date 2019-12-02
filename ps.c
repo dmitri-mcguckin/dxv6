@@ -42,7 +42,11 @@ main(int argc, char* argv[])
       procs[i].uid,
       procs[i].gid,
       procs[i].ppid,
+      #ifdef CS333_P4
       procs[i].priority,
+      #else
+      -1,
+      #endif
       eseconds,
       epadding,
       edecimal,
