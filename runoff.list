@@ -102,3 +102,7 @@ testuidgid.txt
 p2-test.c
 p3-test.c
 p4-test.c
+p4-priority.c
+
+setpriority.c
+getpriority.c

@@ -3,6 +3,13 @@
 #include "user.h"
 #include "uproc.h"
 
+/*char* priorities[] = {
+[0]         "low",
+[1]         "medium",
+[2]         "high",
+[3]         "super"
+};*/
+
 int
 main(int argc, char* argv[])
 {
@@ -11,7 +18,7 @@ main(int argc, char* argv[])
   uint status = getprocs(max, procs);
   if(status <= 0) exit();
 
-  printf(1, "\nPID\tName         UID\tGID\tPPID\tElapsed\tCPU\tState\tSize\n");
+  printf(1, "\nPID\tName         UID\tGID\tPPID\tPrio\tElapsed\tCPU\tState\tSize\n");
   for(uint i = 0; i < status; ++i){
       uint et = procs[i].elapsed_ticks; // Elapsed time
       uint eseconds = et / 1000;
@@ -29,12 +36,13 @@ main(int argc, char* argv[])
       else if(cdecimal < 100) cpadding = "0";
       else cpadding = "";
 
-      printf(1, "%d\t%s\t     %d\t%d\t%d\t%d.%s%d\t%d.%s%d\t%s\t%d\n",
+      printf(1, "%d\t%s\t     %d\t%d\t%d\t%d\t%d.%s%d\t%d.%s%d\t%s\t%d\n",
       procs[i].pid,
       procs[i].name,
       procs[i].uid,
       procs[i].gid,
       procs[i].ppid,
+      procs[i].priority,
       eseconds,
       epadding,
       edecimal,

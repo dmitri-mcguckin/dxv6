@@ -59,3 +59,8 @@ int setgid(uint);
 
 int getprocs(uint max, struct uproc* table);
 #endif
+
+#ifdef CS333_P4
+int setpriority(int, int);
+int getpriority(int);
+#endif

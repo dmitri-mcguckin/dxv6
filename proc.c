@@ -19,6 +19,13 @@ static char *states[] = {
 [ZOMBIE]    "zombie"
 };
 
+/*static char* priorities[] = { // For int to str priority listings
+[LOW]       "low",
+[MEDIUM]    "medium",
+[HIGH]      "high",
+[SUPER]     "super"
+};*/
+
 // debug routines
 #ifdef DEBUG
 static void checkProcs(const char * file, const char * function, int line);
@@ -38,6 +45,14 @@ static void initFreeList(void);
 static void stateListAdd(struct ptrs*, struct proc*);
 static int  stateListRemove(struct ptrs*, struct proc* p);
 static void assertState(struct proc*, enum procstate, const char *, int);
+#endif
+
+#ifdef CS333_P4
+static void initPriorityLists(void);
+static void priorityListAdd(enum procprio, struct proc*);
+static int priorityListRemove(enum procprio, struct proc*);
+
+static void checkDemotion(struct proc*);
 #endif
 
 static struct {
@@ -129,6 +144,7 @@ allocproc(void)
     return 0;
   }
 
+  // Give the proc a state
   #ifdef CS333_P3
   stateListRemove(&ptable.list[UNUSED], p);
   assertState(p, UNUSED, __FUNCTION__, __LINE__);
@@ -138,6 +154,13 @@ allocproc(void)
   p->state = EMBRYO;
   #endif // CS333_P3
 
+  // Give the proc its first priority
+  #ifdef CS333_P4
+  priorityListAdd(SUPER, p);
+  p->priority = SUPER;
+  p->budget = DEFAULT_BUDGET;
+  #endif
+
   p->pid = nextpid++;
   release(&ptable.lock);
 
@@ -145,6 +168,7 @@ allocproc(void)
   if((p->kstack = kalloc()) == 0){
     acquire(&ptable.lock);
 
+    // Undo allocation work and throw out proc if not enough room in memory for a new proc
     #ifdef CS333_P3
     stateListRemove(&ptable.list[EMBRYO], p);
     assertState(p, EMBRYO, __FUNCTION__, __LINE__);
@@ -242,6 +266,7 @@ userinit(void)
   p->state = RUNNABLE;
   stateListAdd(&ptable.list[RUNNABLE], p);
   #else
+
   p->state = RUNNABLE;
   #endif
 
@@ -392,7 +417,11 @@ exit(void)
   #else
   curproc->state = ZOMBIE;
   #endif
-  //release(&ptable.lock);
+
+  #ifdef CS333_P4
+  curproc->budget -= (ticks - curproc->cpu_ticks_in);
+  checkDemotion(curproc);
+  #endif
 
   #ifdef PDX_XV6
   curproc->sz = 0;
@@ -464,7 +493,7 @@ wait(void)
     // Scan through zombie table looking for children.
     havekids = 0;
     for(enum procstate state = EMBRYO; state <= ZOMBIE; ++state){
-      for(p = ptable.list[state].head; p; p = p->next){
+      for(p = ptable.list[state].head; p; p = p->snext){
         if(p->parent != curproc)
           continue;
         havekids = 1;
@@ -720,6 +749,11 @@ yield(void)
   curproc->state = RUNNABLE;
   #endif
 
+  #ifdef CS333_P4
+  curproc->budget -= (ticks - curproc->cpu_ticks_in);
+  checkDemotion(curproc);
+  #endif
+
   sched();
   release(&ptable.lock);
 }
@@ -786,6 +820,11 @@ sleep(void *chan, struct spinlock *lk)
   p->state = SLEEPING;
   stateListAdd(&ptable.list[SLEEPING], p);
 
+  #ifdef CS333_P4
+  p->budget -= (ticks - p->cpu_ticks_in);
+  checkDemotion(p);
+  #endif
+
   sched();
 
   // Tidy up.
@@ -842,7 +881,7 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.list[SLEEPING].head; p; p = p->next){
+  for(p = ptable.list[SLEEPING].head; p; p = p->snext){
     if(p->chan == chan){
       stateListRemove(&ptable.list[SLEEPING], p);
       assertState(p, SLEEPING, __FUNCTION__, __LINE__);
@@ -883,7 +922,7 @@ kill(int pid)
 
   acquire(&ptable.lock);
   for(enum procstate state = EMBRYO; state <= RUNNING; ++state){
-    for(p = ptable.list[state].head; p; p = p->next){
+    for(p = ptable.list[state].head; p; p = p->snext){
       if(p->pid == pid){
         p->killed = 1;
         // Wake process from sleep if necessary.
@@ -1023,12 +1062,53 @@ procdumpP3(struct proc* p, char* state){
 }
 #endif
 
+#ifdef CS333_P4
+void
+procdumpP4(struct proc* p, char* state){
+  uint ppid = 0;
+  if(p->parent) ppid = p->parent->pid;
+
+  uint et = ticks - p->start_ticks; // Elapsed time
+  uint eseconds = et / 1000;
+  uint edecimal = et - (eseconds * 1000);
+  char* epadding;
+  if(edecimal < 10) epadding = "00";
+  else if(edecimal < 100) epadding = "0";
+  else epadding = "";
+
+  uint ct = p->cpu_ticks_total; // CPU time
+  uint cseconds = ct / 1000;
+  uint cdecimal = ct - (cseconds * 1000);
+  char* cpadding;
+  if(cdecimal < 10) cpadding = "00";
+  else if(cdecimal < 100) cpadding = "0";
+  else cpadding = "";
+ 
+  cprintf("%d\t%s\t     %d\t%d\t%d\t%d\t%d.%s%d\t%d.%s%d\t%s\t%d\t",
+    p->pid,
+    p->name,
+    p->uid,
+    p->gid,
+    ppid,
+    p->priority,
+    eseconds,
+    epadding,
+    edecimal,
+    cseconds,
+    cpadding,
+    cdecimal,
+    state,
+    p->sz);
+}
+#endif
+
 void
 procdump(void)
 {
   int i;
   struct proc *p;
   char *state;
+  //char* priority; // For int to str priority listings
   uint pc[10];
 
 #if defined(CS333_P4)
@@ -1048,12 +1128,24 @@ procdump(void)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
-    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+
+    // Check for valid state AND valid string translation
+    if(p->state >= 0 && p->state < statecount && states[p->state])
       state = states[p->state];
     else
       state = "???";
 
-    #if defined(CS333_P3)
+    /*#ifdef CS333_P4 // For int to str priority listings
+    // Check for valid priority AND valid string translation
+    if(p->priority >=0 && p->priority < (MAXPRIO + 1) && priorities[p->priority])
+      priority = priorities[p->priority];
+    else
+      priority = "???";
+    #endif*/
+
+    #if defined(CS333_P4)
+    procdumpP4(p, state);
+    #elif defined(CS333_P3)
     procdumpP3(p, state);
     #elif defined(CS333_P2)
     procdumpP2(p, state);
@@ -1078,12 +1170,14 @@ procdump(void)
 #ifdef CS333_P3
 void
 readydump(void){
-  struct proc* p;
-
+  int first = 1;
   cprintf("\nReady List Processes:\n");
-  for(p = ptable.list[RUNNABLE].head; p; p = p->next){
-    cprintf("%d", p->pid);
-    if(p->next) cprintf(" -> ");
+  for(int prio = 0; prio <= MAXPRIO; ++prio){
+    for(struct proc* p = ptable.ready[prio].head; p; p = p->pnext){
+      if(first) first = 0;
+      else cprintf(" -> ");
+      cprintf("(%d, %d, %d)", p->pid, p->priority, p->budget);
+    }
   }
   cprintf("\n$ ");
 }
@@ -1091,16 +1185,16 @@ readydump(void){
 void
 freedump(void){
   uint i = 0;
-  for(struct proc* p = ptable.list[UNUSED].head; p; p = p->next){ ++i; }
+  for(struct proc* p = ptable.list[UNUSED].head; p; p = p->snext){ ++i; }
   cprintf("Free List Size: %d\n$ ", i);
 }
 
 void
 sleepdump(void){
   cprintf("\nSleep List Processes:\n");
-  for(struct proc* p = ptable.list[SLEEPING].head; p; p = p->next){
+  for(struct proc* p = ptable.list[SLEEPING].head; p; p = p->snext){
     cprintf("%d", p->pid);
-    if(p->next) cprintf(" -> ");
+    if(p->snext) cprintf(" -> ");
   }
   cprintf("\n$ ");
 }
@@ -1108,9 +1202,9 @@ sleepdump(void){
 void
 zombiedump(void){
   cprintf("\nZombie List Processes:\n");
-  for(struct proc* p = ptable.list[ZOMBIE].head; p; p = p->next){
+  for(struct proc* p = ptable.list[ZOMBIE].head; p; p = p->snext){
     cprintf("(%d, %d)", p->pid, p->parent->pid);
-    if(p->next) cprintf(" -> ");
+    if(p->snext) cprintf(" -> ");
   }
   cprintf("\n$ ");
 }
@@ -1130,6 +1224,7 @@ getproc(uint max, struct uproc* table)
     table[i].pid = p->pid;
     table[i].uid = p->uid;
     table[i].gid = p->gid;
+    table[i].priority = p->priority;
     if(!p->parent) table[i].ppid = 0;
     else table[i].ppid = p->parent->pid;
     table[i].elapsed_ticks = (ticks - p->start_ticks);
@@ -1144,7 +1239,7 @@ getproc(uint max, struct uproc* table)
 
   return i;
 }
-#endif
+#endif // CS333_P2
 
 #ifdef CS333_P3
 // list management helper functions
@@ -1153,11 +1248,11 @@ stateListAdd(struct ptrs* list, struct proc* p) {
   if((*list).head == NULL){
     (*list).head = p;
     (*list).tail = p;
-    p->next = NULL;
+    p->snext = NULL;
   } else{
-    ((*list).tail)->next = p;
-    (*list).tail = ((*list).tail)->next;
-    ((*list).tail)->next = NULL;
+    ((*list).tail)->snext = p;
+    (*list).tail = ((*list).tail)->snext;
+    ((*list).tail)->snext = NULL;
   }
 }
 
@@ -1172,7 +1267,7 @@ stateListRemove(struct ptrs* list, struct proc* p)
   struct proc* previous = 0;
 
   if(current == p){
-    (*list).head = ((*list).head)->next;
+    (*list).head = ((*list).head)->snext;
     // prevent tail remaining assigned when we've removed the only item
     // on the list
     if((*list).tail == p){
@@ -1187,7 +1282,7 @@ stateListRemove(struct ptrs* list, struct proc* p)
     }
 
     previous = current;
-    current = current->next;
+    current = current->snext;
   }
 
   // Process not found. return error
@@ -1198,13 +1293,13 @@ stateListRemove(struct ptrs* list, struct proc* p)
   // Process found.
   if(current == (*list).tail){
     (*list).tail = previous;
-    ((*list).tail)->next = NULL;
+    ((*list).tail)->snext = NULL;
   } else{
-    previous->next = current->next;
+    previous->snext = current->snext;
   }
 
-  // Make sure p->next doesn't point into the list.
-  p->next = NULL;
+  // Make sure p->snext doesn't point into the list.
+  p->snext = NULL;
 
   return 0;
 }
@@ -1219,10 +1314,7 @@ initProcessLists(){
   }
   
   #ifdef CS333_P4
-  for (i = 0; i <= MAXPRIO; i++) {
-    ptable.ready[i].head = NULL;
-    ptable.ready[i].tail = NULL;
-  }
+  initPriorityLists();
   #endif
 }
 
@@ -1246,7 +1338,118 @@ assertState(struct proc *p, enum procstate state, const char * func, int line) {
   cprintf("Error: proc state is %s and should be %s.\nCalled from %s line %d\n", states[p->state], states[state], func, line);
   panic("Error: Process state incorrect in assertState()");
 }
-#endif
+#endif // CS333_P3
+
+#ifdef CS333_P4
+static void
+initPriorityLists() {
+  int i;
+
+  for(i = 0; i <= MAXPRIO; ++i){
+    ptable.ready[i].head = NULL;
+    ptable.ready[i].tail = NULL;
+  }
+}
+
+static void
+priorityListAdd(enum procprio priority, struct proc* p){
+  struct ptrs* list = &ptable.ready[priority];
+
+  if((*list).head == NULL){ // Nothing in this priority, add to head AND tail
+    (*list).head = p;
+    (*list).tail = p;
+    p->pnext = NULL;
+  }
+  else{ // List exists, add to tail
+    ((*list).tail)->pnext = p;
+    (*list).tail = ((*list).tail)->pnext;
+    (*list).tail->pnext = NULL;
+  }
+}
+
+static int
+priorityListRemove(enum procprio priority, struct proc* p){
+  struct ptrs* list = &ptable.ready[priority];
+
+  // Do nothing if ready list is not allocated or if proc doesn't exist  
+  if((*list).head == NULL || (*list).tail == NULL || p == NULL) return -1;
+
+  struct proc* curr = (*list).head;
+  struct proc* prev = NULL;
+
+  if(curr == p){ // Removal at head
+    (*list).head = ((*list).head)->pnext;
+    if((*list).tail == p) (*list).tail = NULL; // Trivial one-item-list case, update tail to be NULL too
+    return 0;
+  }
+
+  while(curr){ // Traverse to the PID or to the end of the list
+    if(curr == p) break;
+    prev = curr;
+    curr = curr->pnext;
+  }
+
+  if(!curr) return -1; // Didn't find PID
+  else if(curr == (*list).tail){ // Removal at tail
+    (*list).tail = prev;
+    ((*list).tail)->pnext = NULL;
+  }
+  else // Removal in the middle
+    prev->pnext = curr->pnext;
+
+  return 0;
+}
+
+static void
+checkDemotion(struct proc* p){
+  if(!p) return; // If the proc doesn't exist, don't do anything
+
+  if(p->budget <= 0){ // Proc used all its budget, time to demote
+    if(p->priority - 1 >= 0) setpriority(p->pid, p->priority - 1);
+    else setpriority(p->pid, 0);
+  }
+}
+
+// Search the whole ready list for the matching PID
+//    and change proc to desired priority
+int
+setpriority(int pid, int priority) {
+  struct proc* p;
+
+  // If invalid priority range, don't try to reset the priority
+  if(priority < 0 || priority > (MAXPRIO + 1)) return -2;
+
+  for(enum procprio prio = 0; prio <= MAXPRIO; ++prio){
+    for(p = ptable.ready[prio].head; p; p = p->pnext){
+      if(p->pid == pid){
+        int rc = priorityListRemove(p->priority, p);
+        if(rc < 0) panic("failed to remove proc from priority list");
+
+        priorityListAdd(priority, p);
+        p->priority = priority;
+        p->budget = DEFAULT_BUDGET;
+        return p->priority;
+      }
+    }
+  }
+
+  return -1;
+}
+
+// Search the whole ready list for the matching PID
+//    and load priority if found
+int
+getpriority(int pid) {
+  struct proc *p;
+
+  for(enum procprio prio = 0; prio < MAXPRIO; ++prio){
+    for(p = ptable.ready[prio].head; p; p = p->pnext){
+      if(p->pid == pid) return p->priority;
+    }
+  }
+  return -1;
+}
+#endif // CS333_P4
 
 // debug routines
 #ifdef DEBUG
@@ -1254,7 +1457,7 @@ static int
 procLookup(struct proc *p, struct proc *np){
   while (np != NULL) {
     if (np == p) return 1;
-    np = np->next;
+    np = np->snext;
   }
   return 0;
 }
@@ -1277,7 +1480,7 @@ checkProcs(const char *file, const char *func, int line){
   int found;
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; ++p){
     found = findProc(p);
     if (found) continue;
     cprintf("checkprocs error. Called from %s, %s, @ %d\n", file, func, line);

@@ -6,6 +6,8 @@
 #include "user.h"
 #include "date.h"
 
+#define STDOUT 1
+
 static char *months[] = {"NULL", "Jan", "Feb", "Mar", "Apr",
   "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 static char *days[] = {"Sun", "Mon", "Tue", "Wed",
@@ -31,14 +33,14 @@ main(int argc, char *argv[])
 
   day = dayofweek(r.year, r.month, r.day);
 
-  printf(1, "%s %s %d", days[day], months[r.month], r.day);
-  printf(1, " ");
+  printf(STDOUT, "%s %s %d", days[day], months[r.month], r.day);
+  printf(STDOUT, " ");
   if (r.hour < 10) printf(1, "0");
-  printf(1, "%d:", r.hour);
+  printf(STDOUT, "%d:", r.hour);
   if (r.minute < 10) printf(1, "0");
-  printf(1, "%d:", r.minute);
+  printf(STDOUT, "%d:", r.minute);
   if (r.second < 10) printf(1, "0");
-  printf(1, "%d UTC %d\n", r.second, r.year);
+  printf(STDOUT, "%d UTC %d\n", r.second, r.year);
 
   exit();
 }

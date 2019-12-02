@@ -35,6 +35,7 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum procprio { LOW, MEDIUM, HIGH, SUPER };
 
 // Per-process state
 struct proc {
@@ -42,6 +43,7 @@ struct proc {
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
   enum procstate state;        // Process state
+  enum procprio priority;      // Process priority
   uint pid;                    // Process ID
   struct proc *parent;         // Parent process. NULL indicates no parent
   struct trapframe *tf;        // Trap frame for current syscall
@@ -59,12 +61,17 @@ struct proc {
   #endif
 
   #ifdef CS333_P2
-  uint cpu_ticks_total;         // Total elapesd ticks
-  uint cpu_ticks_in;            // Ticks when scheduled
+  uint cpu_ticks_total;         // Total number of elapesd ticks across scheduling
+  uint cpu_ticks_in;            // System ticks when process was last scheduled
   #endif
 
   #ifdef CS333_P3
-  struct proc* next;            // Next pointer for... something...
+  struct proc* snext;           // Next pointer for state list
+  #endif
+
+  #ifdef CS333_P4
+  int budget;
+  struct proc* pnext;           // Next pointer for priority list
   #endif
 };
 

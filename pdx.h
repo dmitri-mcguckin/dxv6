@@ -31,4 +31,6 @@
 
 #ifndef MAXPRIO
 #define MAXPRIO 3
+#define DEFAULT_BUDGET 3000
+#define TICKS_TO_PROMOTE 3000
 #endif // MAXPRIO

@@ -31,3 +31,6 @@
 #define SYS_setgid    SYS_setuid+1
 
 #define SYS_getprocs    SYS_setgid+1
+
+#define SYS_setpriority    SYS_getprocs+1
+#define SYS_getpriority    SYS_setpriority+1

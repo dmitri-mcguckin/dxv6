@@ -121,6 +121,11 @@ struct proc*    myproc();
 void            pinit(void);
 void            procdump(void);
 
+#ifdef CS333_P4
+int             setpriority(int, int);
+int             getpriority(int);
+#endif
+
 #ifdef CS333_P3
 void            readydump(void);
 void            freedump(void);
@@ -136,8 +141,9 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+
 #ifdef CS333_P2
-int getproc(uint, struct uproc*);
+int             getproc(uint, struct uproc*);
 #endif
 
 // swtch.S
