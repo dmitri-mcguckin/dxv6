@@ -30,7 +30,7 @@
 #endif  // PDX_INCLUDE
 
 #ifndef MAXPRIO
-#define MAXPRIO 3
+#define MAXPRIO 2
 #define DEFAULT_BUDGET 500
 #define TICKS_TO_PROMOTE 3000
 #endif // MAXPRIO

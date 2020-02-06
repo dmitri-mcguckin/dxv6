@@ -54,7 +54,7 @@ static int priorityListRemoveAll(struct proc*);
 static int priorityListRemove(enum procprio, struct proc*);
 
 static void checkPromotion(struct proc*);
-//static void checkDemotion(struct proc*);
+static void checkDemotion(struct proc*);
 #endif
 
 static struct {
@@ -733,6 +733,7 @@ scheduler(void)
         p->state = RUNNING;
         stateListAdd(&ptable.list[RUNNING], p);
 
+        checkDemotion(p);
         priorityListRemoveAll(p);
 
         #ifdef CS333_P1
@@ -1398,7 +1399,7 @@ procdump(void)
       continue;
 
     // Check for valid state AND valid string translation
-    if(p->state >= 0 && p->state < statecount && states[p->state])
+    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
       state = states[p->state];
     else
       state = "???";
@@ -1726,7 +1727,7 @@ checkPromotion(struct proc* p){
   else setpriority(p->pid, MAXPRIO);
 }
 
-/*static void
+static void
 checkDemotion(struct proc* p){
   if(!p) return; // If the proc doesn't exist, don't do anything
 
@@ -1734,7 +1735,7 @@ checkDemotion(struct proc* p){
     if(p->priority - 1 >= 0) setpriority(p->pid, p->priority - 1);
     else setpriority(p->pid, 0);
   }
-}*/
+}
 
 // Search the whole ready list for the matching PID
 //    and change proc to desired priority
@@ -1743,7 +1744,7 @@ setpriority(int pid, int priority) {
   struct proc* p;
 
   // If invalid priority range, don't try to reset the priority
-  if(priority < 0 || priority > (MAXPRIO + 1)) return -2;
+  if(priority < 0 || priority > MAXPRIO) return -2;
 
   for(int prio = 0; prio <= MAXPRIO; ++prio){
     for(p = ptable.ready[prio].head; p; p = p->pnext){
